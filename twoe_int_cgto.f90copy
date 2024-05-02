@@ -1,0 +1,686 @@
+module twoe_int_cgto
+use newtypes
+!use overlap_mod
+!use nuclear_mod
+!use fdn_mod
+!use cgto, only : normgto, genPolgto
+use centerlib
+use matrices
+use colllib_2e
+use collint
+use MatRep
+use omp_lib
+use onee_int_cgto
+implicit none
+ 
+
+  contains 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine Compute_2eint_cgto(ib,bp)
+
+  integer :: izgrid, ib
+  double precision :: bp
+  
+  integer :: i, j, k, l, iy, jy, ky, ly, li, lj, lk, ll, nli, nlj, nlk, nll
+  integer :: k2ij, k2kl, k2cij, k2ckl
+  integer :: igto, jgto, kgto, lgto, icgto, jcgto, kcgto, lcgto, im, jm, km, lm, kicgto, kjcgto, kkcgto, klcgto
+  integer :: itrans, jtrans, ktrans, ltrans
+
+  double precision :: vx, vy, vz
+
+  integer :: nmax
+  integer, dimension(:), allocatable :: geom
+
+  double complex, dimension(:,:,:,:), allocatable :: SrepMO1, SrepMO2, SrepMO3, SrepMO4
+
+!!$OMP  THREADPRIVATE( i, j, k, l, iy, jy, ky, ly, li, lj, lk, ll, nli, nlj, nlk, nll, k2ij, k2kl, k2cij, k2ckl,vx, vy, vz )
+!!$OMP  THREADPRIVATE( igto, jgto, kgto, lgto, icgto, jcgto, kcgto, lcgto, im, jm, km, lm, kicgto, kjcgto, kkcgto, klcgto,itrans, jtrans, ktrans, ltrans )
+!!$OMP  THREADPRIVATE( nmax, geom )
+
+
+!$OMP  PARALLEL PRIVATE(izgrid, i, j, k, l, iy, jy, ky, ly, li, lj, lk, ll, nli, nlj, nlk,nll, k2ij, k2kl, k2cij, k2ckl,vx, vy, vz, igto, jgto, kgto, lgto, icgto, jcgto, kcgto, lcgto, im, jm, km, lm, kicgto,kjcgto, kkcgto, klcgto,itrans, jtrans, ktrans, ltrans, nmax, geom, SrepCGto1,SrepCGto2,SrepCGto3,SrepCGto4 )
+
+!----------------remove most of  THERADPRIVATE(unnecissary)--which slow down the omp--------DEC. 12, 2017. by Junwen--------------
+
+!$OMP DO SCHEDULE(DYNAMIC)
+
+  DO izgrid = 1, zgrid%na
+      write(*,*) izgrid
+
+  vx = v%vx
+  vy = v%vy
+  vz = v%vz
+
+!****************************************************************************!
+!************************* TT-TT block **************************************!
+!****************************************************************************!
+
+!  allocate(geom(npCenters))
+!  geom(:) = 1
+!  allocate(SrepCGTO1(ntcgto,ntcgto,ntcgto,ntcgto))
+!  SrepCGTO1(:,:,:,:)=0.d0
+!
+!!------TTTT------------
+!  call  CollMatRep(geom,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,tCenters,ntCenters,tCenters,ntCenters,tCenters,ntCenters,tCenters,ntCenters,SrepCGTO1,'a')
+!
+!  deallocate(geom,SrepCGTO1)
+
+
+!************************** END block TTTT ***********************************!
+!****************************************************************************!
+
+
+!****************************************************************************!
+!************************* TP-TP block **************************************!
+!****************************************************************************!
+
+  nmax=max(ntCenters,npCenters)
+  allocate(geom(nmax))
+  geom(:) = 1
+  allocate(SrepCGTO1(npcgto,ntcgto,npcgto,ntcgto))
+  allocate(SrepCGTO2(ntcgto,npcgto,npcgto,ntcgto))
+  allocate(SrepCGTO3(npcgto,ntcgto,ntcgto,npcgto))
+  allocate(SrepCGTO4(ntcgto,npcgto,ntcgto,npcgto))
+
+  SrepCGTO1(:,:,:,:)=0.d0
+  SrepCGTO2(:,:,:,:)=0.d0
+  SrepCGTO3(:,:,:,:)=0.d0
+  SrepCGTO4(:,:,:,:)=0.d0
+
+!------TPTP-----Symetric--Vz=0.d0, could compute by the same way with GetSta-----
+  call CollMatRepTypeA(geom,izgrid,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,tCenters,ntCenters,pCenters,npCenters,tCenters,ntCenters,pCenters,npCenters,SrepCGTO1)
+!------PTPT------------
+
+  do i=1, npcgto
+    do j=1, ntcgto
+      do k=1, npcgto
+        do l=1, ntcgto
+
+         SrepCGTO4(l,k,j,i )=  SrepCGTO1(k,l,i,j)  
+
+       enddo
+     enddo
+    enddo
+  enddo
+!  call CollMatRep(geom,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,pCenters,npCenters,tCenters,ntCenters,pCenters,npCenters,tCenters,ntCenters,SrepCGTO4,'a')
+!------TPPT------------
+  call CollMatRep(geom,izgrid,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,0.d0,vz,tCenters,ntCenters,pCenters,npCenters,pCenters,npCenters,tCenters,ntCenters,SrepCGTO2,'a')
+!------PTTP------------
+  do i=1, npcgto
+    do j=1, ntcgto
+      do k=1, ntcgto
+        do l=1, npcgto
+
+         SrepCGTO3(l,k,j,i )=  SrepCGTO2(k,l,i,j)  
+
+        enddo
+      enddo
+    enddo
+  enddo
+
+!  call CollMatRep(geom,0.d0,0.d0,-2.d0*vz,0.d0,0.d0,2.d0*vz,0.d0,0.d0,vz,pCenters,npCenters,tCenters,ntCenters,tCenters,ntCenters,pCenters,npCenters,SrepCGTO3,'a')
+
+  allocate(SrepMO1(npmo,ntmo,npmo,ntmo))
+  allocate(SrepMO2(ntmo,npmo,npmo,ntmo))
+  allocate(SrepMO3(npmo,ntmo,ntmo,npmo))
+  allocate(SrepMO4(ntmo,npmo,ntmo,npmo))
+  call Compute_2eint_mo(npcgto,ntcgto,npcgto,ntcgto,npmo,ntmo,npmo,ntmo,pmo,tmo,pmo,tmo,SrepCGTO1,SrepMO1)
+  call Compute_2eint_mo(ntcgto,npcgto,npcgto,ntcgto,ntmo,npmo,npmo,ntmo,tmo,pmo,pmo,tmo,SrepCGTO2,SrepMO2)
+  call Compute_2eint_mo(npcgto,ntcgto,ntcgto,npcgto,npmo,ntmo,ntmo,npmo,pmo,tmo,tmo,pmo,SrepCGTO3,SrepMO3)
+  call Compute_2eint_mo(ntcgto,npcgto,ntcgto,npcgto,ntmo,npmo,ntmo,npmo,tmo,pmo,tmo,pmo,SrepCGTO4,SrepMO4)
+
+
+!  write(111,'(6(f20.16,1X))')zgrid%a(izgrid),SrepMO1(1,1,1,1),SrepMO4(1,1,1,1)
+
+  if(izgrid==1 .and. ib==1) then
+    open(unit=10,file='twoe_int_ptpt.txt',status='new')
+    open(unit=11,file='twoe_int_tppt.txt',status='new')
+    open(unit=12,file='twoe_int_pttp.txt',status='new')
+    open(unit=13,file='twoe_int_tptp.txt',status='new')
+  else
+    open(unit=10,file='twoe_int_ptpt.txt',status='old',access='append')
+    open(unit=11,file='twoe_int_tppt.txt',status='old',access='append')
+    open(unit=12,file='twoe_int_pttp.txt',status='old',access='append')
+    open(unit=13,file='twoe_int_tptp.txt',status='old',access='append')
+  endif
+
+   write(10,*)zgrid%a(izgrid)
+   write(11,*)zgrid%a(izgrid)
+   write(12,*)zgrid%a(izgrid)
+   write(13,*)zgrid%a(izgrid)
+
+!   write(100,*)zgrid%a(izgrid)
+!   do i=1, npcgto
+!    do j=1, ntcgto
+!      do k=1, npcgto
+!        do l=1, ntcgto
+!         write(100,'(4(i5,1X),6(f20.16,1X))')k,l,i,j,SrepCGTO1(k,l,i,j)
+!       enddo
+!     enddo
+!    enddo
+!  enddo
+   
+
+
+   do i=1, npmo
+    do j=1, ntmo
+      do k=1, npmo
+        do l=1, ntmo
+         write(10,'(4(i5,1X),6(f20.16,1X))')k,l,i,j,SrepMO1(k,l,i,j)
+         write(11,'(4(i5,1X),2(f20.16,1X))')l,k,i,j,SrepMO2(l,k,i,j)  
+         write(12,'(4(i5,1X),2(f20.16,1X))')k,l,j,i,SrepMO3(k,l,j,i)  
+         write(13,'(4(i5,1X),2(f20.16,1X))')l,k,j,i,SrepMO4(l,k,j,i)  
+       enddo
+     enddo
+    enddo
+  enddo
+   
+  close(10)
+  close(11)
+  close(12)
+  close(13)
+   
+  deallocate(geom)
+  deallocate(SrepCGTO1,SrepCGTO2,SrepCGTO3,SrepCGTO4)
+  deallocate(SrepMO1,SrepMO2,SrepMO3,SrepMO4)
+
+!************************** END block TPTP **********************************!
+!****************************************************************************!
+
+!****************************************************************************!
+!************************* TT-TP block **************************************!
+!****************************************************************************!
+
+  nmax=max(ntCenters,npCenters)
+  allocate(geom(nmax))
+  geom(:) = 1
+
+  allocate(SrepCGTO1(npcgto,ntcgto,ntcgto,ntcgto))
+  allocate(SrepCGTO2(ntcgto,npcgto,ntcgto,ntcgto))
+  SrepCGTO1(:,:,:,:)=0.d0
+  SrepCGTO2(:,:,:,:)=0.d0
+
+!----TTTP---------
+  call CollMatRep(geom,izgrid,0.d0,0.d0,-vz,0.d0,0.d0,2.d0*vz,vx,vy,vz,tCenters,ntCenters,tCenters,ntCenters,tCenters,ntCenters,pCenters,npCenters,SrepCGTO1,'b')
+!----TTPT---------
+ do i=1, ntcgto
+  do j=1, ntcgto
+   do k=1, npcgto
+    do l=1, ntcgto
+
+       SrepCGTO2(l,k,j,i )= SrepCGTO1(k,l,i,j)
+
+    enddo
+   enddo
+  enddo
+ enddo
+
+ if(izgrid==1 .and. ib==1) then
+    open(unit=10,file='twoe_int_pttt.txt',status='new')
+    open(unit=11,file='twoe_int_tptt.txt',status='new')
+  else
+    open(unit=10,file='twoe_int_pttt.txt',status='old',access='append')
+    open(unit=11,file='twoe_int_tptt.txt',status='old',access='append')
+  endif
+
+  allocate(SrepMO1(npmo,ntmo,ntmo,ntmo))
+  allocate(SrepMO2(ntmo,npmo,ntmo,ntmo))
+  call Compute_2eint_mo(npcgto,ntcgto,ntcgto,ntcgto,npmo,ntmo,ntmo,ntmo,pmo,tmo,tmo,tmo,SrepCGTO1,SrepMO1)
+  call Compute_2eint_mo(ntcgto,npcgto,ntcgto,ntcgto,ntmo,npmo,ntmo,ntmo,tmo,pmo,tmo,tmo,SrepCGTO2,SrepMO2)
+
+   write(10,*)zgrid%a(izgrid)
+   write(11,*)zgrid%a(izgrid)
+
+   do i=1, ntmo
+    do j=1, ntmo
+      do k=1, npmo
+        do l=1, ntmo
+         write(10,'(4(i5,1X),2(f20.16,1X))')k,l,i,j,SrepMO1(k,l,i,j)
+         write(11,'(4(i5,1X),2(f20.16,1X))')l,k,i,j,SrepMO2(l,k,i,j)
+       enddo
+     enddo
+    enddo
+  enddo
+  close(10)
+  close(11)
+
+!SrepCGTO2=0.d0
+!----TTPT---------
+!   call CollMatRep(geom,izgrid,0.d0,0.d0,0.d0,0.d0,0.d0,vz,0.d0,0.d0,vz,tCenters,ntCenters,tCenters,ntCenters,pCenters,npCenters,tCenters,ntCenters,SrepCGTO2,'b')
+
+  deallocate(geom)
+!************************** END block TTTP **********************************!
+!****************************************************************************!
+
+!****************************************************************************!
+!************************* TP-TT block **************************************!
+!****************************************************************************!
+
+  allocate(SrepCGTO3(ntcgto,ntcgto,npcgto,ntcgto))
+  allocate(SrepCGTO4(ntcgto,ntcgto,ntcgto,npcgto))
+  SrepCGTO3(:,:,:,:)=0.d0
+  SrepCGTO4(:,:,:,:)=0.d0
+
+!----TPTT---------
+ do i=1, ntcgto
+  do j=1, npcgto
+   do k=1, ntcgto
+    do l=1, ntcgto
+
+       SrepCGTO3(l,k,j,i )=dconjg( SrepCGTO1(j,i,l,k))
+
+    enddo
+   enddo
+  enddo
+ enddo
+!----TPTT---------
+!  call CollMatRep(geom,-vx,-vy,-vz,0.d0,0.d0,0.d0,vx,vy,vz,tCenters,ntCenters,pCenters,npCenters,tCenters,ntCenters,tCenters,ntCenters,SrepCGTO3,'e')
+!----PTTT---------
+
+ do i=1, npcgto
+   do j=1, ntcgto
+     do k=1, ntcgto
+       do l=1, ntcgto
+         SrepCGTO4(l,k,j,i )= SrepCGTO3(k,l,i,j )
+       enddo
+     enddo
+   enddo
+ enddo
+
+  allocate(SrepMO3(ntmo,ntmo,npmo,ntmo))
+  allocate(SrepMO4(ntmo,ntmo,ntmo,npmo))
+  call Compute_2eint_mo(ntcgto,ntcgto,npcgto,ntcgto,ntmo,ntmo,npmo,ntmo,tmo,tmo,pmo,tmo,SrepCGTO3,SrepMO3)
+  call Compute_2eint_mo(ntcgto,ntcgto,ntcgto,npcgto,ntmo,ntmo,ntmo,npmo,tmo,tmo,tmo,pmo,SrepCGTO4,SrepMO4)
+
+
+ if(izgrid==1 .and. ib==1) then
+    open(unit=12,file='twoe_int_ttpt.txt',status='new')
+    open(unit=13,file='twoe_int_tttp.txt',status='new')
+  else
+    open(unit=12,file='twoe_int_ttpt.txt',status='old',access='append')
+    open(unit=13,file='twoe_int_tttp.txt',status='old',access='append')
+  endif
+
+   write(12,*)zgrid%a(izgrid)
+   write(13,*)zgrid%a(izgrid)
+
+   do i=1, ntmo
+    do j=1, npmo
+      do k=1, ntmo
+        do l=1, ntmo
+         write(12,'(4(i5,1X),2(f20.16,1X))')l,k,j,i,SrepMO3(l,k,j,i)
+         write(13,'(4(i5,1X),2(f20.16,1X))')l,k,i,j,SrepMO4(l,k,i,j)
+       enddo
+     enddo
+    enddo
+  enddo
+  close(12)
+  close(13)
+
+
+!  call CollMatRep(geom,0.d0,0.d0,-2.d0*vz,vx,vy,vz,vx,vy,vz,pCenters,npCenters,tCenters,ntCenters,tCenters,ntCenters,tCenters,ntCenters,SrepCGTO4,'e')
+
+!  deallocate(geom)
+  deallocate(SrepCGTO1,SrepCGTO2,SrepCGTO3,SrepCGTO4)
+  deallocate(SrepMO1,SrepMO2,SrepMO3,SrepMO4)
+!************************** END block TTTP **********************************!
+!****************************************************************************!
+
+!****************************************************************************!
+!************************* TT-PP block **************************************!
+!****************************************************************************!
+
+  nmax=max(ntCenters,npCenters)
+  allocate(geom(nmax))
+  geom(:) = 1
+
+  allocate(SrepCGTO1(npcgto,npcgto,ntcgto,ntcgto))
+!  allocate(SrepCGTO2(npcgto,ntcgto,npcgto,ntcgto))
+  SrepCGTO1(:,:,:,:)=0.d0
+!  SrepCGTO2(:,:,:,:)=0.d0
+
+!----TTPP---------
+
+  call CollMatRep(geom,izgrid,0.d0,0.d0,0.d0,0.d0,0.d0,2.d0*vz,0.d0,0.d0,vz,tCenters,ntCenters,tCenters,ntCenters,pCenters,npCenters,pCenters,npCenters,SrepCGTO1,'c')
+
+  deallocate(geom)
+
+!************************** END block TTPP***********************************!
+!****************************************************************************!
+
+!****************************************************************************!
+!************************* PP-TT block **************************************!
+!****************************************************************************!
+
+
+!  nmax=max(ntCenters,npCenters)
+!  allocate(geom(nmax))
+!  geom(:) = 1
+
+!  allocate(SrepCGTO1(ntcgto,ntcgto,npcgto,npcgto))
+!  allocate(SrepCGTO2(npcgto,ntcgto,npcgto,ntcgto))
+!  SrepCGTO1(:,:,:,:)=0.d0
+!  SrepCGTO2(:,:,:,:)=0.d0
+
+  allocate(SrepCGTO2(ntcgto,ntcgto,npcgto,npcgto))
+
+  SrepCGTO2(:,:,:,:)=0.d0
+
+!----PPTT---------
+ do i=1, npcgto
+  do j=1, npcgto
+   do k=1, ntcgto
+    do l=1, ntcgto
+
+       SrepCGTO2(l,k,j,i )= dconjg(SrepCGTO1(j,i,l,k))
+
+    enddo
+   enddo
+  enddo
+ enddo
+!----PPTT---------
+!  call CollMatRep(geom,0.d0,0.d0,-2.d0*vz,0.d0,0.d0,0.d0,0.d0,0.d0,vz,pCenters,npCenters,pCenters,npCenters,tCenters,ntCenters,tCenters,ntCenters,SrepCGTO2,'d')
+
+  allocate(SrepMO1(npmo,npmo,ntmo,ntmo))
+  allocate(SrepMO2(ntmo,ntmo,npmo,npmo))
+  call Compute_2eint_mo(npcgto,npcgto,ntcgto,ntcgto,npmo,npmo,ntmo,ntmo,pmo,pmo,tmo,tmo,SrepCGTO1,SrepMO1)
+  call Compute_2eint_mo(ntcgto,ntcgto,npcgto,npcgto,ntmo,ntmo,npmo,npmo,tmo,tmo,pmo,pmo,SrepCGTO2,SrepMO2)
+
+ if(izgrid==1 .and. ib==1) then
+    open(unit=10,file='twoe_int_pptt.txt',status='new')
+    open(unit=11,file='twoe_int_ttpp.txt',status='new')
+  else
+    open(unit=10,file='twoe_int_pptt.txt',status='old',access='append')
+    open(unit=11,file='twoe_int_ttpp.txt',status='old',access='append')
+  endif
+
+   write(10,*)zgrid%a(izgrid)
+   write(11,*)zgrid%a(izgrid)
+
+   do i=1, npmo
+    do j=1, npmo
+      do k=1, ntmo
+        do l=1, ntmo
+         write(10,'(4(i5,1X),2(f20.16,1X))')j,i,l,k,SrepMO1(j,i,l,k)
+         write(11,'(4(i5,1X),2(f20.16,1X))')l,k,j,i,SrepMO2(l,k,j,i)
+       enddo
+     enddo
+    enddo
+  enddo
+  close(10)
+  close(11)
+
+!  deallocate(geom)
+  deallocate(SrepCGTO1,SrepCGTO2)
+  deallocate(SrepMO1,SrepMO2)
+
+!************************** END block PPTT***********************************!
+!****************************************************************************!
+
+!****************************************************************************!
+!************************* PP-TP block **************************************!
+!****************************************************************************!
+
+  nmax=max(ntCenters,npCenters)
+  allocate(geom(nmax))
+  geom(:) = 1
+
+  allocate(SrepCGTO1(npcgto,ntcgto,npcgto,npcgto))
+  allocate(SrepCGTO2(ntcgto,npcgto,npcgto,npcgto))
+  SrepCGTO1(:,:,:,:)=0.d0
+  SrepCGTO2(:,:,:,:)=0.d0
+
+!----PPTP---------
+  call CollMatRep(geom,izgrid,0.d0,0.d0,-2.d0*vz,0.d0,0.d0,vz,0.d0,0.d0,vz,pCenters,npCenters,pCenters,npCenters,tCenters,ntCenters,pCenters,npCenters,SrepCGTO1,'e')
+!----PPPT---------
+
+ do i=1, npcgto
+  do j=1, npcgto
+   do k=1, npcgto
+    do l=1, ntcgto
+
+       SrepCGTO2(l,k,j,i )= SrepCGTO1(k,l,i,j)
+
+    enddo
+   enddo
+  enddo
+ enddo
+
+!----PPPT---------
+!  call CollMatRep(geom, 0.d0,0.d0,-vz, 0.d0, 0.d0,0.d0,0.d0,0.d0,vz,pCenters,npCenters,pCenters,npCenters,pCenters,npCenters,tCenters,ntCenters,SrepCGTO2,'e')
+
+  allocate(SrepMO1(npmo,ntmo,npmo,npmo))
+  allocate(SrepMO2(ntmo,npmo,npmo,npmo))
+  call Compute_2eint_mo(npcgto,ntcgto,npcgto,npcgto,npmo,ntmo,npmo,npmo,pmo,tmo,pmo,pmo,SrepCGTO1,SrepMO1)
+  call Compute_2eint_mo(ntcgto,npcgto,npcgto,npcgto,ntmo,npmo,npmo,npmo,tmo,pmo,pmo,pmo,SrepCGTO2,SrepMO2)
+
+ if(izgrid==1 .and. ib==1) then
+    open(unit=10,file='twoe_int_ptpp.txt',status='new')
+    open(unit=11,file='twoe_int_tppp.txt',status='new')
+  else
+    open(unit=10,file='twoe_int_ptpp.txt',status='old',access='append')
+    open(unit=11,file='twoe_int_tppp.txt',status='old',access='append')
+  endif
+
+   write(10,*)zgrid%a(izgrid)
+   write(11,*)zgrid%a(izgrid)
+
+   do i=1, npmo
+    do j=1, npmo
+      do k=1, npmo
+        do l=1, ntmo
+         write(10,'(4(i5,1X),2(f20.16,1X))')k,l,i,j,SrepMO1(k,l,i,j)
+         write(11,'(4(i5,1X),2(f20.16,1X))')l,k,j,i,SrepMO2(l,k,j,i)
+       enddo
+     enddo
+    enddo
+  enddo
+  close(10)
+  close(11)
+
+  deallocate(geom)
+
+!************************** END block PPTP **********************************!
+!****************************************************************************!
+
+!****************************************************************************!
+!************************* TP-PP block **************************************!
+!****************************************************************************!
+
+!  nmax=max(ntCenters,npCenters)
+!  allocate(geom(nmax))
+!  geom(:) = 1
+
+  allocate(SrepCGTO3(npcgto,npcgto,npcgto,ntcgto))
+  allocate(SrepCGTO4(npcgto,npcgto,ntcgto,npcgto))
+  SrepCGTO3(:,:,:,:)=0.d0
+  SrepCGTO4(:,:,:,:)=0.d0
+
+!----TPPP---------
+ do i=1, ntcgto
+  do j=1, npcgto
+   do k=1, npcgto
+    do l=1, npcgto
+
+       SrepCGTO3(l,k,j,i )= dconjg ( SrepCGTO1(j,i,l,k) )
+
+    enddo
+   enddo
+  enddo
+ enddo
+!  call CollMatRep(geom,0.d0,0.d0,0.d0,0.d0,0.d0,vz,0.d0,0.d0,vz,tCenters,ntCenters,pCenters,npCenters,pCenters,npCenters,pCenters,npCenters,SrepCGTO3,'b')
+
+!----PTPP---------
+ do i=1, npcgto
+  do j=1, ntcgto
+   do k=1, npcgto
+    do l=1, npcgto
+
+       SrepCGTO4(l,k,j,i )= dconjg ( SrepCGTO2(j,i,l,k) )
+
+    enddo
+   enddo
+  enddo
+ enddo
+
+  allocate(SrepMO3(npmo,npmo,npmo,ntmo))
+  allocate(SrepMO4(npmo,npmo,ntmo,npmo))
+  call Compute_2eint_mo(npcgto,npcgto,npcgto,ntcgto,npmo,npmo,npmo,ntmo,pmo,pmo,pmo,tmo,SrepCGTO3,SrepMO3)
+  call Compute_2eint_mo(npcgto,npcgto,ntcgto,npcgto,npmo,npmo,ntmo,npmo,pmo,pmo,tmo,pmo,SrepCGTO4,SrepMO4)
+
+
+ if(izgrid==1 .and. ib==1) then
+    open(unit=12,file='twoe_int_pppt.txt',status='new')
+    open(unit=13,file='twoe_int_pptp.txt',status='new')
+  else
+    open(unit=12,file='twoe_int_pppt.txt',status='old',access='append')
+    open(unit=13,file='twoe_int_pptp.txt',status='old',access='append')
+  endif
+
+   write(12,*)zgrid%a(izgrid)
+   write(13,*)zgrid%a(izgrid)
+
+   do i=1, npmo
+    do j=1, ntmo
+      do k=1, npmo
+        do l=1, npmo
+         write(12,'(4(i5,1X),2(f20.16,1X))')l,k,i,j,SrepMO3(l,k,i,j)
+         write(13,'(4(i5,1X),2(f20.16,1X))')l,k,j,i,SrepMO4(l,k,j,i)
+       enddo
+     enddo
+    enddo
+  enddo
+  close(12)
+  close(13)
+
+
+!  call CollMatRep(geom, 0.d0,0.d0,-vz, 0.d0, 0.d0,2.d0*vz,0.d0,0.d0,vz,pCenters,npCenters,tCenters,ntCenters,pCenters,npCenters,pCenters,npCenters,SrepCGTO4,'b')
+
+!  deallocate(geom)
+
+  deallocate(SrepCGTO1,SrepCGTO2,SrepCGTO3,SrepCGTO4)
+  deallocate(SrepMO1,SrepMO2,SrepMO3,SrepMO4)
+
+
+
+
+
+!ccjia: test....********** PP-PP block **************************************!
+!****************************************************************************!
+
+
+  allocate(geom(npCenters))
+!  write(*,*) "ccjia: PP-PP block, npCenters,",npCenters
+  geom(:) = 1
+  allocate(SrepCGTO1(npcgto,npcgto,npcgto,npcgto))
+  SrepCGTO1(:,:,:,:)=0.d0
+!
+!!------PPPP------------
+  call CollMatRep(geom,izgrid,0.d0,0.d0,-2.d0*vz,0.d0,0.d0,2.d0*vz,0.d0,0.d0,vz,pCenters,npCenters,pCenters,npCenters,pCenters,npCenters,pCenters,npCenters,SrepCGTO1,'c')
+
+  if(izgrid==1 .and. ib==1) then
+    open(unit=10,file='twoe_int_pppp.txt',status='new')
+    write(10,*) bp
+    !open(unit=111,file='information.txt',status='new')
+  else
+    open(unit=10,file='twoe_int_pppp.txt',status='old',access='append')
+    if(izgrid==1 .and. ib/=1) write(10,*) bp
+    !open(unit=111,file='information.txt',status='old',access='append')
+  endif
+
+  allocate(SrepMO1(npmo,npmo,npmo,npmo))
+  call Compute_2eint_mo(npcgto,npcgto,npcgto,npcgto,npmo,npmo,npmo,npmo,pmo,pmo,pmo,pmo,SrepCGTO1,SrepMO1)
+  SrepMO1=0.0d0
+  write(10,*)zgrid%a(izgrid)
+
+   do i=1, npmo
+    do j=1, npmo
+      do k=1, npmo
+        do l=1, npmo
+         !write(111,'(4(i5,1X),2(f20.16,1X))')k,l,i,j,SrepCGTO1(k,l,i,j)
+         write(10,'(4(i5,1X),2(f20.16,1X))')k,l,i,j,SrepMO1(k,l,i,j)
+       enddo
+     enddo
+    enddo
+  enddo
+  close(10)
+
+
+  deallocate(geom,SrepCGTO1,SrepMO1)
+
+!************************** END block PPPP ***********************************!
+!*****************************************************************************!
+
+
+  END DO
+
+!$OMP END DO
+
+!$OMP END  PARALLEL
+
+!************************** END block TPPP **********************************!
+!****************************************************************************!
+
+  end subroutine Compute_2eint_cgto
+
+  subroutine Compute_2eint_mo(ncgto1,ncgto2,ncgto3,ncgto4,nmo1,nmo2,nmo3,nmo4,eig1,eig2,eig3,eig4,mat,matf)
+  implicit none
+
+  integer :: ncgto1,ncgto2,ncgto3,ncgto4,nmo1,nmo2,nmo3,nmo4
+  double precision, dimension(ncgto1,nmo1) :: eig1
+  double precision, dimension(ncgto2,nmo2) :: eig2
+  double precision, dimension(ncgto3,nmo3) :: eig3
+  double precision, dimension(ncgto4,nmo4) :: eig4
+
+  double complex, dimension(ncgto1,ncgto2,ncgto3,ncgto4) :: mat
+  double complex, dimension(nmo1,ncgto2,ncgto3,ncgto4) :: mat1
+  double complex, dimension(nmo1,nmo2,ncgto3,ncgto4) :: mat2
+  double complex, dimension(nmo1,nmo2,nmo3,ncgto4) :: mat3
+  double complex, dimension(nmo1,nmo2,nmo3,nmo4) :: matf
+
+  integer :: i, j, k, l
+
+  mat1(:,:,:,:) = 0d0
+  mat2(:,:,:,:) = 0d0
+  mat3(:,:,:,:) = 0d0
+  matf(:,:,:,:) = 0d0
+
+  do i = 1, ncgto1
+    do j = 1, nmo1
+!      write(*,*)'1',j,i,mat(i,:,:,:),eig1(i,j)
+      mat1(j,:,:,:) = mat1(j,:,:,:) + mat(i,:,:,:)*eig1(i,j)
+    enddo
+  enddo
+
+  do i = 1, ncgto2
+    do j = 1,  nmo2
+!      write(*,*)'2',j,i,mat1(:,i,:,:),eig2(i,j)
+      mat2(:,j,:,:) = mat2(:,j,:,:) + mat1(:,i,:,:)*eig2(i,j)
+    enddo
+  enddo
+
+  do i = 1, ncgto3
+    do j = 1,  nmo3
+!      write(*,*)'3',j,i,mat2(:,:,i,:),eig3(i,j)
+      mat3(:,:,j,:) = mat3(:,:,j,:) + mat2(:,:,i,:)*eig3(i,j)
+    enddo
+  enddo
+
+  do i = 1, ncgto4
+    do j = 1,  nmo4
+!      write(*,*)'4',j,i,mat3(:,:,:,i),eig4(i,j)
+      matf(:,:,:,j) = matf(:,:,:,j) + mat3(:,:,:,i)*eig4(i,j)
+    enddo
+  enddo
+
+!      write(*,*)'f',j,i,matf(:,:,:,:)
+!  stop
+
+  end subroutine Compute_2eint_mo
+
+
+
+end module twoe_int_cgto
