@@ -209,7 +209,7 @@ implicit none
 !call omp_set_num_threads(20)
 
    call system("date")
-   t1=OMP_get_wtime()
+   !   t1=OMP_get_wtime()
 
 !-------!OMP time loops are inside the subroutine now.---Junwen, DEC. 12, 2017.--------------
 
@@ -276,7 +276,7 @@ implicit none
    !call integrals_filemv(filemv,creat_impab)
 !!!
    call system("date")
-   t2=OMP_get_wtime()
+   !t2=OMP_get_wtime()
 
    tmec = t2-t1
 
